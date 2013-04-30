@@ -1,0 +1,1 @@
+copy "C:\Users\Scott\Documents\Visual Studio 2005\Projects\RPG VX Ace SDK\release\RPG VX Ace SDK.dll" C:\Users\Scott\Documents\RPGVXAce\Project1\BitmapFuncs.dll
