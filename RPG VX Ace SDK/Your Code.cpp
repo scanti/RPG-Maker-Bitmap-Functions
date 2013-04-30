@@ -658,3 +658,69 @@ RGSSApi bool Vignette(unsigned int object, int radius)
     }
     return true;
 }
+
+RGSSApi bool Filter(long object, int kWidth, int kHeight, int* kernel, int scale)
+{
+	#pragma warning (disable:4312)
+	RGSSBMINFO *bitmap = ((RGSSBITMAP*)(object<<1))->bm->bminfo;
+	#pragma warning (default:4312)
+	
+	long width, height;
+	RGSSRGBA *row;
+	RGSSRGBA *rowcopy;
+	long x, y;
+	float red,green,blue;
+	
+	int xm,xp,ym,yp;
+	
+	kWidth += kWidth % 2 - 1;
+	kHeight += kHeight % 2 - 1;
+	
+	if(!bitmap) 
+		return false;
+	width = bitmap->infoheader->biWidth;
+	height = bitmap->infoheader->biHeight;
+	
+	rowcopy=new RGSSRGBA[width*height];
+	row = bitmap->lastRow;
+	
+	RGSSRGBA *rowcopyOffset=rowcopy;
+	memcpy(rowcopy,row,width*height*4);
+	
+	if(scale==0)
+		scale=1;
+	
+	for ( y = 0; y < height; y++) 
+	{    
+		for ( x = 0; x < width; x++) 
+		{
+			red = 0;
+			green = 0;
+			blue = 0;
+			xm = -min((kWidth - 1) / 2, x);
+			ym = -min((kHeight - 1) / 2, y);
+			xp = min((kWidth - 1) / 2, width - x - 1);
+			yp = min((kHeight - 1) / 2, height - y - 1);
+			for (int i = 0;i < kWidth;i++) {
+				for (int e = 0;e < kHeight;e++) {
+					red += (rowcopyOffset + min(xp, max(xm, i - kWidth / 2)) + width * min(yp, max(ym, e - kHeight / 2))) -> red * kernel[i + e * kWidth];
+					green += (rowcopyOffset + min(xp, max(xm, i - kWidth / 2)) + width * min(yp, max(ym, e - kHeight / 2))) -> green * kernel[i + e * kWidth];
+					blue += (rowcopyOffset + min(xp, max(xm, i - kWidth / 2)) + width * min(yp, max(ym, e - kHeight / 2))) -> blue * kernel[i + e * kWidth];
+				}
+			}
+			red /= scale;
+			green /= scale;
+			blue /= scale;
+			
+			row->red=(unsigned char)min(255,max(0,red));
+			row->green=(unsigned char)min(255,max(0,green));
+			row->blue=(unsigned char)min(255,max(0,blue));
+			row++;
+			rowcopyOffset++;
+		}
+	}
+	
+	delete[]rowcopy;
+	
+	return true;
+}
