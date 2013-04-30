@@ -724,3 +724,136 @@ RGSSApi bool Filter(long object, int kWidth, int kHeight, int* kernel, int scale
 	
 	return true;
 }
+
+void get_radial_average(int width, int height, LPBYTE row, int x, int y, int cx, int cy, float scale, int amnt, int* col, int* avg, int* tp, int mr, int wc) {
+	int rscale;
+	int curx, cury, error, ystep, xstep;
+	int x1, y1, deltax, deltay;
+	bool steep;
+	if (wc > 0) {
+		long rr = 2.0 * sqrt((double)x * x * height * height + (double)y * y * width * width);
+		rscale = scale * rr / mr;
+	} else {
+		rscale = scale;
+	}
+	LPBYTE thisrow;
+	int rowsize = width * 4;
+	avg[0] = 0;
+	avg[1] = 0;
+	avg[2] = 0;
+	avg[3] = 0;
+	avg[4] = 0;
+	if (rscale != 0) {
+		deltax = -x;
+		deltay = -y;
+		x1 = x + cx;
+		y1 = y + cy;
+		steep = fabs((float)(deltay)) > fabs((float)(deltax));
+		if (steep) {
+			int tmp;
+			tmp = x1;
+			x1 = y1;
+			y1 = tmp;
+			tmp = deltax;
+			deltax = deltay;
+			deltay = tmp;
+		}
+		ystep = deltay / fabs((float)(deltay));
+		xstep = deltax / fabs((float)(deltax));
+		deltay = fabs((float)(deltay));
+		deltax = fabs((float)(deltax));
+		error = deltax / 2;
+		 
+		curx = x1;
+		cury = y1;
+		for (int i = 0;i < rscale;i++) {
+			if (steep) {
+				if (curx < height && curx >= 0 && cury < width && cury >= 0) {
+					thisrow = row;
+					thisrow -= curx * rowsize;
+					thisrow += cury * 4;
+					avg[0] += thisrow[2];
+					avg[1] += thisrow[1];
+					avg[2] += thisrow[0];
+					avg[3] += thisrow[3];
+					avg[4]++;
+				} else {
+					break;
+				}
+			} else {
+				if (cury < height && cury >= 0 && curx < width && curx >= 0) {
+					thisrow = row;
+					thisrow -= cury * rowsize;
+					thisrow += curx * 4;
+					avg[0] += thisrow[2];
+					avg[1] += thisrow[1];
+					avg[2] += thisrow[0];
+					avg[3] += thisrow[3];
+					avg[4]++;
+				} else {
+					break;
+				}
+			}
+			error -= deltay;
+			if (error < 0) {
+				cury += ystep;
+				error += deltax;
+				if ((steep && cury == width / 2 + ystep) || (!steep && cury == height / 2 + ystep)) break;
+			}
+			curx += xstep;
+			if ((!steep && curx == width / 2 + xstep) || (steep && curx == height / 2 + xstep)) break;
+		}
+	}
+	thisrow = row;
+	thisrow -= (y + cy) * rowsize;
+	thisrow += (x + cx) * 4;
+	if (avg[4] == 0) {
+		col[0] = thisrow[2];
+		col[1] = thisrow[1];
+		col[2] = thisrow[0];
+		col[3] = thisrow[3];
+		return;
+	}
+	col[0] = avg[0] / avg[4];
+	col[1] = avg[1] / avg[4];
+	col[2] = avg[2] / avg[4];
+	col[3] = avg[3] / avg[4];
+}
+ 
+extern "C" _declspec (dllexport) bool radial_blur(long object, long source, int scale, int amnt, int wc) {
+	RGSSBMINFO *bitmap = ((RGSSBITMAP*) (object<<1)) -> bm -> bminfo;
+	RGSSBMINFO *src = ((RGSSBITMAP*) (source << 1)) -> bm -> bminfo;
+	int cx, cy, i, e;
+	int* col = new int[4];
+	int* avg = new int[5];
+	int* tp = new int[4];
+	int rowsize;
+	int mr;
+    int width, height, sw, sh;
+    LPBYTE row, sr;
+    if(!bitmap) return false;
+    width = bitmap -> infoheader -> biWidth;
+    height = bitmap -> infoheader -> biHeight;
+	sw = src -> infoheader -> biWidth;
+	sh = src -> infoheader -> biHeight;
+	if(width != sw || height != sh) return false;
+    rowsize = width * 4;
+    sr = (LPBYTE) (src -> firstRow);
+    row = (LPBYTE) (bitmap -> firstRow);
+	cx = width / 2;
+	cy = height / 2;
+	mr = height * width;// * sqrt(cx * cx + cy * cy);
+	for ( i = 0; i < height; i++) {
+        LPBYTE thisrow = row;
+        for ( e = 0; e < width; e++) {
+            get_radial_average(sw, sh, sr, e - cx, i - cy, cx, cy, scale, amnt, col, avg, tp, mr, wc);
+			thisrow[2] = (int) col[0];
+			thisrow[1] = (int) col[1];
+			thisrow[0] = (int) col[2];
+			thisrow[3] = (int) col[3];
+            thisrow += 4;
+        }
+        row -= rowsize;
+    }
+    return true;
+}
